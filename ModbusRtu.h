@@ -191,26 +191,245 @@ private:
     void buildException( uint8_t u8exception ); // build exception message
 
 public:
+
+    /**
+     * @brief
+     * Default Constructor for Master through Serial
+     *
+     * @ingroup setup
+     */
     Modbus();
+
+    /**
+     * @brief
+     * Full constructor for a Master/Slave through USB/RS232C
+     *
+     * @param u8id   node address 0=master, 1..247=slave
+     * @param u8serno  serial port used 0..3
+     * @ingroup setup
+     * @overload Modbus::Modbus(uint8_t u8id, uint8_t u8serno)
+     * @overload Modbus::Modbus(uint8_t u8id)
+     * @overload Modbus::Modbus()
+     */
     Modbus(uint8_t u8id, uint8_t u8serno);
+
+    /**
+     * @brief
+     * Full constructor for a Master/Slave through USB/RS232C/RS485
+     * It needs a pin for flow control only for RS485 mode
+     *
+     * @param u8id   node address 0=master, 1..247=slave
+     * @param u8serno  serial port used 0..3
+     * @param u8txenpin pin for txen RS-485 (=0 means USB/RS232C mode)
+     * @ingroup setup
+     * @overload Modbus::Modbus(uint8_t u8id, uint8_t u8serno, uint8_t u8txenpin)
+     * @overload Modbus::Modbus(uint8_t u8id)
+     * @overload Modbus::Modbus()
+     */
     Modbus(uint8_t u8id, uint8_t u8serno, uint8_t u8txenpin);
+
+    /**
+     * @brief
+     * Constructor for a Master/Slave through USB/RS232C via software serial
+     * This constructor only specifies u8id (node address) and should be only
+     * used if you want to use software serial instead of hardware serial.
+     * If you use this constructor you have to begin ModBus object by
+     * using "void Modbus::begin(SoftwareSerial *softPort, long u32speed)".
+     *
+     * @param u8id   node address 0=master, 1..247=slave
+     * @ingroup setup
+     * @overload Modbus::Modbus(uint8_t u8id, uint8_t u8serno, uint8_t u8txenpin)
+     * @overload Modbus::Modbus(uint8_t u8id, uint8_t u8serno)
+     * @overload Modbus::Modbus()
+     */
     Modbus(uint8_t u8id);
+
+    /**
+     * @brief
+     * Initialize class object.
+     *
+     * Sets up the serial port using specified baud rate.
+     * Call once class has been instantiated, typically within setup().
+     *
+     * @see http://arduino.cc/en/Serial/Begin#.Uy4CJ6aKlHY
+     * @param speed   baud rate, in standard increments (300..115200)
+     * @ingroup setup
+     */
     void begin(long u32speed);
+
+    /**
+     * @brief
+     * Initialize class object.
+     *
+     * Sets up the software serial port using specified baud rate and SoftwareSerial object.
+     * Call once class has been instantiated, typically within setup().
+     *
+     * @param speed   *softPort, pointer to SoftwareSerial class object
+     * @param speed   baud rate, in standard increments (300..115200)
+     * @ingroup setup
+     */
     void begin(SoftwareSerial *sPort, long u32speed);
+
+    /**
+     * @brief
+     * Initialize class object.
+     *
+     * Sets up the serial port using specified baud rate.
+     * Call once class has been instantiated, typically within setup().
+     *
+     * @see http://arduino.cc/en/Serial/Begin#.Uy4CJ6aKlHY
+     * @param speed   baud rate, in standard increments (300..115200)
+     * @param config  data frame settings (data length, parity and stop bits)
+     * @ingroup setup
+     */
     void begin(long u32speed, uint8_t u8config);
+
+    /**
+     * @brief
+     * Initialize default class object.
+     *
+     * Sets up the serial port using 19200 baud.
+     * Call once class has been instantiated, typically within setup().
+     *
+     * @overload Modbus::begin(uint16_t u16BaudRate)
+     * @ingroup setup
+     */
     void begin();
+
+    /**
+     * @brief
+     * Initialize time-out parameter
+     *
+     * Call once class has been instantiated, typically within setup().
+     * The time-out timer is reset each time that there is a successful communication
+     * between Master and Slave. It works for both.
+     *
+     * @param time-out value (ms)
+     * @ingroup setup
+     */
     void setTimeOut( uint16_t u16timeout); //!<write communication watch-dog timer
     uint16_t getTimeOut(); //!<get communication watch-dog timer value
+
+    /**
+     * @brief
+     * Return communication Watchdog state.
+     * It could be usefull to reset outputs if the watchdog is fired.
+     *
+     * @return TRUE if millis() > u32timeOut
+     * @ingroup loop
+     */
     boolean getTimeOutState(); //!<get communication watch-dog timer state
+
+    /**
+     * @brief
+     * *** Only Modbus Master ***
+     * Generate a query to an slave with a modbus_t telegram structure
+     * The Master must be in COM_IDLE mode. After it, its state would be COM_WAITING.
+     * This method has to be called only in loop() section.
+     *
+     * @see modbus_t
+     * @param modbus_t  modbus telegram structure (id, fct, ...)
+     * @ingroup loop
+     * @todo finish function 15
+     */
     int8_t query( modbus_t telegram ); //!<only for master
+
+    /**
+     * @brief *** Only for Modbus Master ***
+     * This method checks if there is any incoming answer if pending.
+     * If there is no answer, it would change Master state to COM_IDLE.
+     * This method must be called only at loop section.
+     * Avoid any delay() function.
+     *
+     * Any incoming data would be redirected to au16regs pointer,
+     * as defined in its modbus_t query telegram.
+     *
+     * @params	nothing
+     * @return errors counter
+     * @ingroup loop
+     */
     int8_t poll(); //!<cyclic poll for master
+
+    /**
+     * @brief
+     * *** Only for Modbus Slave ***
+     * This method checks if there is any incoming query
+     * Afterwards, it would shoot a validation routine plus a register query
+     * Avoid any delay() function !!!!
+     * After a successful frame between the Master and the Slave, the time-out timer is reset.
+     *
+     * @param *regs  register table for communication exchange
+     * @param u8size  size of the register table
+     * @return 0 if no query, 1..4 if communication error, >4 if correct query processed
+     * @ingroup loop
+     */
     int8_t poll( uint16_t *regs, uint8_t u8size ); //!<cyclic poll for slave
+
+    /**
+     * @brief
+     * Get input messages counter value
+     * This can be useful to diagnose communication
+     *
+     * @return input messages counter
+     * @ingroup buffer
+     */
     uint16_t getInCnt(); //!<number of incoming messages
+
+    /**
+     * @brief
+     * Get transmitted messages counter value
+     * This can be useful to diagnose communication
+     *
+     * @return transmitted messages counter
+     * @ingroup buffer
+     */
     uint16_t getOutCnt(); //!<number of outcoming messages
+
+    /**
+     * @brief
+     * Get errors counter value
+     * This can be useful to diagnose communication
+     *
+     * @return errors counter
+     * @ingroup buffer
+     */
     uint16_t getErrCnt(); //!<error counter
+
+    /**
+     * @brief
+     * Method to read current slave ID address
+     *
+     * @return u8id	current slave address between 1 and 247
+     * @ingroup setup
+     */
     uint8_t getID(); //!<get slave ID between 1 and 247
+
+    /**
+     * Get modbus master state
+     *
+     * @return = 0 IDLE, = 1 WAITING FOR ANSWER
+     * @ingroup buffer
+     */
     uint8_t getState();
+
+    /**
+     * Get the last error in the protocol processor
+     *
+     * @returnreturn   NO_REPLY = 255      Time-out
+     * @return   EXC_FUNC_CODE = 1   Function code not available
+     * @return   EXC_ADDR_RANGE = 2  Address beyond available space for Modbus registers
+     * @return   EXC_REGS_QUANT = 3  Coils or registers number beyond the available space
+     * @ingroup buffer
+     */
     uint8_t getLastError(); //!<get last error message
+
+    /**
+     * @brief
+     * Method to write a new slave ID address
+     *
+     * @param 	u8id	new slave address between 1 and 247
+     * @ingroup setup
+     */
     void setID( uint8_t u8id ); //!<write new ID for the slave
     void end(); //!<finish any communication and release serial communication port
 };
